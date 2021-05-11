@@ -5,18 +5,22 @@ const mainBranch = "main";                  //
 //////////////////////////////////////////////
 
 const https = require("https");
-
+const { addListener } = require("process");
 var totalLineCount = 0;
 
-const repoPath = `/${username}/${repository}/`;
-checkFiles(repoPath, mainBranch);
-setTimeout(() => {
-   console.log("Total line count: " + totalLineCount);
-}, 5000);
+main();
+
+function main() {
+  const repoPath = `/${username}/${repository}/`;
+  checkFiles(repoPath, mainBranch);
+  setTimeout(() => {
+     console.log("Total line count: " + totalLineCount);
+  }, 5000);
+}
+
 
 function countLines(data) {
-  var i = 1;
-  while (1) {
+  for (var i = 1;; i++) {
     var regex = new RegExp('"L' + i + '"');
     if (regex.test(data)) {
       i++;
@@ -24,7 +28,6 @@ function countLines(data) {
       return i - 1;
     }
   }
-  return 0;
 }
 
 function isFolder(path) {
@@ -48,7 +51,7 @@ async function countLinesForFile(pathToFile) {
       data += chunk;
     });
     res.on("end", function () {
-      console.log(pathToFile);
+      console.log(pathToFile.slice(1));
       totalLineCount += countLines(data);
     });
   });
@@ -88,7 +91,10 @@ function checkFiles(path, branch) {
       var files = getFiles(data);
       if (!files) return null;
       for (var i = 0; i < files.files.length; i++) {
-        countLinesForFile(path.replace("tree", "blob") + files.files[i]);
+        var filePath = "";
+        if(!path.includes("tree") && !path.includes("tree")) filePath = path + "blob/main/" + files.files[i];
+        else filePath = path.replace("tree", "blob") + files.files[i];
+        countLinesForFile(filePath)
       }
       for (var i = 0; i < files.folders.length; i++) {
         if (!path.includes(`tree/${branch}/`)) path = path + `tree/${branch}/`;
