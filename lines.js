@@ -1,23 +1,24 @@
-///CHANGE THESE TO YOUR USERNAME AND REPO/////
-const username = "JakobPaulsson";           //
-const repository = "Hackathon";             //
-const mainBranch = "main";                  //
-//////////////////////////////////////////////
+const arguments = process.argv.slice(2);
+const username = arguments[0];
+const repository = arguments[1];
+const mainBranch = arguments[2];             
 
-const https = require("https");
-const { addListener } = require("process");
+const axios = require('axios');
 var totalLineCount = 0;
+var numberOfFiles = 0;
+var countedFiles = 0;
 
 main();
 
-function main() {
+async function main() {
   const repoPath = `/${username}/${repository}/`;
-  checkFiles(repoPath, mainBranch);
-  setTimeout(() => {
-     console.log("Total line count: " + totalLineCount);
-  }, 5000);
+  await countFiles(repoPath, mainBranch);
+  checkFiles(repoPath, mainBranch, numberOfFiles);
 }
 
+function printLines() {
+  console.log("Total line count: " + totalLineCount);
+}
 
 function countLines(data) {
   for (var i = 1;; i++) {
@@ -25,6 +26,8 @@ function countLines(data) {
     if (regex.test(data)) {
       i++;
     } else {
+      countedFiles++;
+      printLines();
       return i - 1;
     }
   }
@@ -40,27 +43,15 @@ function isFolder(path) {
 }
 
 async function countLinesForFile(pathToFile) {
-  var options = {
-    host: "github.com",
-    path: pathToFile,
-    method: "GET",
-  };
-  var request = https.request(options, function (res) {
-    var data = "";
-    res.on("data", function (chunk) {
-      data += chunk;
-    });
-    res.on("end", function () {
-      console.log(pathToFile.slice(1));
-      totalLineCount += countLines(data);
-    });
-  });
-
-  request.on("error", function (e) {
-    console.log(e.message);
-  });
-  request.end();
+  try {
+    var response = await axios.get(`https://github.com${pathToFile}`)
+    console.log(pathToFile.slice(1));
+      totalLineCount += countLines(response.data);
+  } catch (error) {
+    console.log(error);
+  }
 }
+
 
 function getFiles(data) {
   var regex = /[a-zA-Z-" .]+(?=data-pjax=\"#repo-content-pjax-container\")/g;
@@ -73,38 +64,46 @@ function getFiles(data) {
     else allFiles.push(currentMatch);
   }
   return { folders: allFolders, files: allFiles };
+
 }
 
-function checkFiles(path, branch) {
-  var options = {
-    host: "github.com",
-    path: path,
-    method: "GET",
-  };
+async function checkFiles(path, branch, numberOfFiles) {
+    try {
+      var response = await axios.get(`https://github.com${path}`)
+      var files = getFiles(response.data);
 
-  var request = https.request(options, function (res) {
-    var data = "";
-    res.on("data", function (chunk) {
-      data += chunk;
-    });
-    res.on("end", function () {
-      var files = getFiles(data);
-      if (!files) return null;
       for (var i = 0; i < files.files.length; i++) {
         var filePath = "";
-        if(!path.includes("tree") && !path.includes("tree")) filePath = path + "blob/main/" + files.files[i];
+        if(!path.includes("tree") || !path.includes("tree")) filePath = path + "blob/main/" + files.files[i];
         else filePath = path.replace("tree", "blob") + files.files[i];
-        countLinesForFile(filePath)
+        countLinesForFile(filePath);
       }
       for (var i = 0; i < files.folders.length; i++) {
-        if (!path.includes(`tree/${branch}/`)) path = path + `tree/${branch}/`;
-        checkFiles(path + files.folders[i] + "/");
+        if (!path.includes(`tree/${branch}/`)) {
+          path = path + `tree/${branch}/`;
+        }
+        await checkFiles(path + files.folders[i] + "/", branch, numberOfFiles);
       }
-    });
-  });
+    } catch (error) {
+      console.log(error);
+    }
+}
 
-  request.on("error", function (e) {
-    console.log(e.message);
-  });
-  request.end();
+async function countFiles(path,branch) {
+  try {
+    var response = await axios.get(`https://github.com${path}`)
+    var files = getFiles(response.data);
+
+    for (var i = 0; i < files.files.length; i++) {
+      numberOfFiles++;
+    }
+    for (var i = 0; i < files.folders.length; i++) {
+      if (!path.includes(`tree/${branch}/`)) {
+        path = path + `tree/${branch}/`;
+      }
+      await countFiles(path + files.folders[i] + "/", branch);
+    }
+  } catch (error) {
+    console.log(error);
+  }
 }
